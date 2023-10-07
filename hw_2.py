@@ -67,4 +67,5 @@ contact@vg-stroy.com
 +996 772 620088
 +996 550 620088""")
     
+
 executor.start_polling(dp)

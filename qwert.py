@@ -6,14 +6,13 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters import Text
 
 # Ваш токен Telegram бота
 BOT_TOKEN = '5884805064:AAFlp8YTTcfpFSrqCBPDG5Bpw4-BDPS9-bI'
 
 # Настройки SMTP для отправки кода на почту
-EMAIL_ADDRESS = 'your_email@gmail.com'
-EMAIL_PASSWORD = 'your_email_password'
+EMAIL_ADDRESS = 'ahmatovasin@gmail.com'
+EMAIL_PASSWORD = 'qkphllkbrerdkmpc'
 SMTP_SERVER = 'smtp.gmail.com'
 SMTP_PORT = 587
 
@@ -26,10 +25,9 @@ dp = Dispatcher(bot)
 logging.basicConfig(level=logging.INFO)
 dp.middleware.setup(LoggingMiddleware())
 
-# Состояния для управления диалогом
-class States:
-    EMAIL = 'email'
-    VERIFICATION = 'verification'
+# Генерация случайного 6-значного кода
+def generate_verification_code():
+    return str(random.randint(100000, 999999))
 
 # Обработка команды /start
 @dp.message_handler(commands=['start'])
@@ -38,12 +36,13 @@ async def start(message: types.Message):
     verification_code = generate_verification_code()
     verification_codes[user_id] = verification_code
 
-    # Устанавливаем состояние "EMAIL" для пользователя
-    await States.EMAIL.set()
+    # Устанавливаем состояние "email" для пользователя
+    async with FSMContext() as state:
+        await state.set('email')
 
     await message.answer("Для идентификации, введите вашу почту:")
     
-@dp.message_handler(lambda message: message.text, state=States.EMAIL)
+@dp.message_handler(lambda message: message.text, state='email')
 async def process_email(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     email = message.text
@@ -57,11 +56,12 @@ async def process_email(message: types.Message, state: FSMContext):
         await state.update_data(email=email)
 
         await message.answer("Код отправлен на вашу почту. Введите код для идентификации:")
-        await States.VERIFICATION.set()
+        async with FSMContext() as state:
+            await state.set('verification')
     else:
         await message.answer("Неправильный формат почты. Введите корректный адрес почты:")
 
-@dp.message_handler(lambda message: message.text, state=States.VERIFICATION)
+@dp.message_handler(lambda message: message.text, state='verification')
 async def process_verification_code(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     user_code = message.text
@@ -73,6 +73,21 @@ async def process_verification_code(message: types.Message, state: FSMContext):
         await message.answer("Вы успешно идентифицировались!")
     else:
         await message.answer("Неправильный ввод. Введите код еще раз:")
+
+# Валидация адреса электронной почты
+def validate_email(email):
+    return re.match(r"[^@]+@[^@]+\.[^@]+", email)
+
+# Отправка кода на почту
+def send_verification_code(email, code):
+    subject = "Код идентификации"
+    body = f"Ваш код идентификации: {code}"
+    message = f"Subject: {subject}\n\n{body}"
+
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        server.starttls()
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_ADDRESS, email, message)
 
 if __name__ == '__main__':
     from aiogram import executor
